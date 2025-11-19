@@ -1,0 +1,445 @@
+<!doctype html>
+
+<head>
+  <meta charset="utf-8" />
+  <title>NBI Information System (Demo)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <!-- Tailwind (CDN) -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- React 18 + Babel (CDN) -->
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    /* print helpers for the reports */
+    @media print {
+      nav, .no-print { display:none !important; }
+      .print-white { background:white !important; }
+    }
+  </style>
+</head>
+<body class="bg-gray-50 text-gray-900">
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const {useState, useMemo} = React;
+
+    /* ---------- Demo data ---------- */
+    const CUSTOMERS = [
+      { id:"C-0101", name:"Tower Books NYC", mktCode:"4", industry:"Bookstore",
+        ship:{company:"Tower Books NYC", phone:"212-555-1010", address:"55 Liberty St", city:"New York", state:"NY", zip:"10005", country:"USA"},
+        bill:{company:"Tower Books HQ", address:"1 Publisher Way", city:"New York", state:"NY", zip:"10007", country:"USA"},
+        discountPct:5
+      },
+      { id:"C-0202", name:"Barnes & Noble", mktCode:"2", industry:"Chain Store",
+        ship:{company:"B&N Regional DC", phone:"212-555-2020", address:"100 Union Sq", city:"New York", state:"NY", zip:"10003", country:"USA"},
+        bill:{company:"B&N Accounting", address:"122 5th Ave", city:"New York", state:"NY", zip:"10011", country:"USA"},
+        discountPct:8
+      },
+    ];
+
+    const CATALOG = [
+      { sku:"BK-1001", title:"Systems Analysis Made Easy", vendor:"V-ACME", coverPrice:49.95, discPrice:39.96, mktAllowed:["0","2","4","7"], weightLb:1.1 },
+      { sku:"BK-2002", title:"Relational Modeling Essentials", vendor:"V-ACME", coverPrice:59.95, discPrice:47.96, mktAllowed:["0","4","7"], weightLb:1.3 },
+      { sku:"CD-3003", title:"Database Jams (CD)", vendor:"V-MUSIC", coverPrice:19.99, discPrice:15.99, mktAllowed:["0","1","3","9"], weightLb:0.3 },
+    ];
+
+    const currency = n => n.toLocaleString(undefined,{style:"currency", currency:"USD"});
+
+    /* ---------- App Shell ---------- */
+    function App() {
+      const [tab, setTab] = useState("landing");
+      return (
+        <div className="min-h-screen">
+          <Header tab={tab} setTab={setTab} />
+          <main className="mx-auto max-w-7xl p-6 space-y-6">
+            {tab==="landing"   && <Landing setTab={setTab}/>}
+            {tab==="order"     && <SalesOrderEntry/>}
+            {tab==="returns"   && <ReturnAuthorization/>}
+            {tab==="manifest"  && <ShipmentManifest/>}
+            {tab==="statement" && <CustomerStatement/>}
+          </main>
+          <footer className="mx-auto max-w-7xl p-6 text-xs text-gray-500">
+            Mappings — Processes: P1 Accounts, P2 Order Entry, P3 Ship, P4 Invoice/AR, P6 Returns, P7 Reports. Stores: D1 Customer, D2 Orders, D3 OrderLines, D4 Inventory, D5 Shipments, D6 Invoices/AR, D7 Returns, D9 MarketRules.
+          </footer>
+        </div>
+      );
+    }
+
+    function Header({tab,setTab}) {
+      const Item = ({id,label}) => (
+        <button onClick={()=>setTab(id)}
+          className={`rounded-full px-3 py-1 text-sm ${tab===id ? "bg-black text-white" : "bg-gray-100 hover:bg-gray-200"}`}>
+          {label}
+        </button>
+      );
+      return (
+        <header className="sticky top-0 z-10 bg-white shadow">
+          <div className="mx-auto flex max-w-7xl items-center justify-between p-4">
+            <h1 className="text-xl font-bold">NBI Information System (Demo)</h1>
+            <nav className="flex flex-wrap gap-2">
+              <Item id="landing" label="Home"/>
+              <Item id="order" label="Sales Order Entry"/>
+              <Item id="returns" label="Return Authorization"/>
+              <Item id="manifest" label="Shipment Manifest"/>
+              <Item id="statement" label="Customer Statement"/>
+            </nav>
+          </div>
+        </header>
+      );
+    }
+
+    /* ---------- Landing (first screen) ---------- */
+    function Landing({setTab}) {
+      const cards = [
+        { title:"Enter Sales Order",   desc:"Create & price orders, enforce market restrictions, reserve stock.", go:"order",   dfd:"P2", st:"D2/D3" },
+        { title:"Return Authorization",desc:"Log returns, restock inventory, issue credits.",                    go:"returns", dfd:"P6", st:"D7" },
+        { title:"Shipment Manifest",   desc:"Daily pick/pack list and labels.",                                  go:"manifest",dfd:"P3", st:"D5" },
+        { title:"Customer Statement",  desc:"End-of-month transactions & balances.",                              go:"statement",dfd:"P4", st:"D6" },
+      ];
+      return (
+        <section>
+          <h2 className="mb-1 text-2xl font-semibold">Welcome</h2>
+          <p className="mb-6 text-gray-600">Choose a function to begin. This landing screen satisfies the “first screen” UI requirement.</p>
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
+            {cards.map(c=>(
+              <div key={c.title} className="rounded-2xl border bg-white p-4 shadow">
+                <div className="text-lg font-semibold">{c.title}</div>
+                <p className="mt-1 text-sm text-gray-600">{c.desc}</p>
+                <div className="mt-3 flex gap-2">
+                  <span className="rounded-full bg-gray-100 px-2 py-1 text-xs">DFD: {c.dfd}</span>
+                  <span className="rounded-full bg-gray-100 px-2 py-1 text-xs">Store: {c.st}</span>
+                </div>
+                <button onClick={()=>setTab(c.go)} className="mt-3 rounded-xl border px-3 py-2 text-sm hover:bg-gray-50">Open</button>
+              </div>
+            ))}
+          </div>
+        </section>
+      );
+    }
+
+    /* ---------- Input Form #1 — Sales Order Entry (P2) ---------- */
+    function SalesOrderEntry(){
+      const [custId, setCustId] = useState("");
+      const cust = useMemo(()=> CUSTOMERS.find(c=>c.id===custId), [custId]);
+      const [lines, setLines] = useState([{ id:1, sku:"", qty:1, price:0, ext:0, mktOK:true }]);
+      const [orderDate, setOrderDate] = useState(new Date().toISOString().slice(0,10));
+      const [shipMethod, setShipMethod] = useState("UPS Ground");
+      const [notes, setNotes] = useState("");
+
+      function pick(i, sku){
+        const cat = CATALOG.find(x=>x.sku===sku);
+        setLines(ls=> ls.map(l=> l.id===i
+          ? ({...l, sku, price: cat?.discPrice||0, mktOK: cat? (cust? cat.mktAllowed.includes(cust.mktCode):true):true, ext: (cat?.discPrice||0)*(l.qty||0) })
+          : l));
+      }
+      function setQty(i, q){ setLines(ls=> ls.map(l=> l.id===i? ({...l, qty:q, ext:(l.price||0)*q }): l)); }
+      function add(){ setLines(ls=> [...ls, { id: Math.max(...ls.map(x=>x.id))+1, sku:"", qty:1, price:0, ext:0, mktOK:true }]); }
+      function remove(i){ setLines(ls=> ls.filter(l=> l.id!==i)); }
+
+      const sub = lines.reduce((s,l)=>s+l.ext,0);
+      const discount = cust? sub*(cust.discountPct/100):0;
+      const tax = (sub-discount)*0.07;
+      const weight = lines.reduce((s,l)=> s + (CATALOG.find(x=>x.sku===l.sku)?.weightLb||0) * (l.qty||0), 0);
+      const freight = Math.max(5, weight * 0.8);
+      const total = sub - discount + tax + freight;
+
+      return (
+        <section className="space-y-4">
+          <div className="flex items-end justify-between">
+            <h2 className="text-xl font-semibold">Sales Order Entry</h2>
+            <div className="text-right text-xs text-gray-600">DFD: P2 • Creates D2/D3 • Checks D9 • Reserves D4</div>
+          </div>
+
+          {/* Header */}
+          <div className="rounded-2xl bg-white p-4 shadow">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+              <label className="text-sm">Customer
+                <select value={custId} onChange={e=>setCustId(e.target.value)} className="mt-1 w-full rounded border px-2 py-2">
+                  <option value="">Select…</option>
+                  {CUSTOMERS.map(c=> <option key={c.id} value={c.id}>{c.id} — {c.name}</option>)}
+                </select>
+              </label>
+              <label className="text-sm">Order Date
+                <input type="date" value={orderDate} onChange={e=>setOrderDate(e.target.value)} className="mt-1 w-full rounded border px-2 py-2"/>
+              </label>
+              <label className="text-sm">Ship Method
+                <select value={shipMethod} onChange={e=>setShipMethod(e.target.value)} className="mt-1 w-full rounded border px-2 py-2">
+                  <option>UPS Ground</option><option>UPS 2nd Day</option><option>UPS Next Day Air</option><option>RPS Ground</option>
+                </select>
+              </label>
+            </div>
+            {cust &&
+              <p className="mt-2 text-xs text-gray-600">Industry: {cust.industry} • Market Code: <span className="font-mono">{cust.mktCode}</span> • Default Discount: {cust.discountPct}%</p>}
+            <label className="mt-3 block text-sm">Notes
+              <input value={notes} onChange={e=>setNotes(e.target.value)} className="mt-1 w-full rounded border px-2 py-2" placeholder="Special handling, gift, backorder rules…"/>
+            </label>
+          </div>
+
+          {/* Lines */}
+          <div className="rounded-2xl bg-white p-4 shadow">
+            <div className="mb-2 flex items-center justify-between">
+              <h3 className="text-lg font-semibold">Order Lines</h3>
+              <button onClick={add} className="rounded-xl border px-3 py-2 hover:bg-gray-50">+ Add Line</button>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-100">
+                  <tr><th className="p-2 text-left">SKU</th><th className="p-2 text-right">Qty</th><th className="p-2 text-right">Price</th><th className="p-2 text-right">Ext.</th><th className="p-2">Rule</th><th className="p-2"> </th></tr>
+                </thead>
+                <tbody>
+                  {lines.map(l=>(
+                    <tr key={l.id} className="border-b last:border-none">
+                      <td className="p-2">
+                        <select value={l.sku} onChange={e=>pick(l.id, e.target.value)} className="w-40 rounded border px-2 py-1">
+                          <option value="">Select…</option>
+                          {CATALOG.map(c=> <option key={c.sku} value={c.sku}>{c.sku}</option>)}
+                        </select>
+                      </td>
+                      <td className="p-2 text-right">
+                        <input type="number" min={1} value={l.qty} onChange={e=>setQty(l.id, Number(e.target.value))} className="w-20 rounded border px-2 py-1 text-right"/>
+                      </td>
+                      <td className="p-2 text-right font-mono">{currency(l.price)}</td>
+                      <td className="p-2 text-right font-mono">{currency(l.ext)}</td>
+                      <td className="p-2 text-center">
+                        <span className={`rounded-full px-2 py-1 text-xs ${l.mktOK?'bg-green-100 text-green-700':'bg-red-100 text-red-700'}`}>
+                          {l.mktOK ? 'Allowed' : 'Restricted'}
+                        </span>
+                      </td>
+                      <td className="p-2 text-center">
+                        <button onClick={()=>remove(l.id)} className="rounded border px-2 py-1 text-xs hover:bg-gray-50">Remove</button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="mt-3 grid grid-cols-1 gap-4 md:grid-cols-3">
+              <div className="rounded-xl border p-3">
+                <div className="flex justify-between text-sm"><span>Sub-Total</span><span className="font-mono">{currency(sub)}</span></div>
+                <div className="flex justify-between text-sm"><span>Customer Discount</span><span className="font-mono">−{currency(discount)}</span></div>
+                <div className="flex justify-between text-sm"><span>Tax (est.)</span><span className="font-mono">{currency(tax)}</span></div>
+                <div className="flex justify-between text-sm"><span>Freight (est.)</span><span className="font-mono">{currency(freight)}</span></div>
+                <div className="mt-2 border-t pt-2 flex justify-between font-semibold"><span>Total</span><span className="font-mono">{currency(total)}</span></div>
+              </div>
+              <div className="md:col-span-2 text-sm text-gray-600">
+                <p><span className="font-semibold">How it maps:</span> Creates <span className="font-medium">Orders</span> (D2) & <span className="font-medium">OrderLines</span> (D3). Checks <span className="font-medium">MarketRules</span> (D9). Reserves <span className="font-medium">Inventory</span> (D4). Downstream: P3 ships (D5), P4 invoices (D6).</p>
+              </div>
+            </div>
+          </div>
+        </section>
+      );
+    }
+
+    /* ---------- Input Form #2 — Return Authorization (P6) ---------- */
+    function ReturnAuthorization(){
+      const [custId,setCustId]=useState("");
+      const [origOrder,setOrigOrder]=useState("");
+      const [lines,setLines]=useState([{ id:1, sku:"", qty:1, price:0, reason:"Damaged" }]);
+
+      function pick(i, sku){ const cat = CATALOG.find(x=>x.sku===sku); setLines(ls=>ls.map(l=>l.id===i?({...l, sku, price:cat?.discPrice||0}):l)); }
+      function setQty(i,q){ setLines(ls=>ls.map(l=>l.id===i?({...l, qty:q}):l)); }
+      function add(){ setLines(ls=>[...ls, { id: Math.max(...ls.map(x=>x.id))+1, sku:"", qty:1, price:0, reason:"Damaged" }]); }
+
+      const totalCredit = lines.reduce((s,l)=> s + (l.price||0)*(l.qty||0), 0);
+
+      return (
+        <section className="space-y-4">
+          <div className="flex items-end justify-between">
+            <h2 className="text-xl font-semibold">Return Authorization / Credit Memo</h2>
+            <div className="text-right text-xs text-gray-600">DFD: P6 • Creates D7 • Credits D6 • Adjusts D4</div>
+          </div>
+
+          <div className="rounded-2xl bg-white p-4 shadow">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+              <label className="text-sm">Customer
+                <select value={custId} onChange={e=>setCustId(e.target.value)} className="mt-1 w-full rounded border px-2 py-2">
+                  <option value="">Select…</option>
+                  {CUSTOMERS.map(c=> <option key={c.id} value={c.id}>{c.id} — {c.name}</option>)}
+                </select>
+              </label>
+              <label className="text-sm">Original Order #
+                <input value={origOrder} onChange={e=>setOrigOrder(e.target.value)} className="mt-1 w-full rounded border px-2 py-2" placeholder="SO-2025-0001"/>
+              </label>
+              <label className="text-sm">Return Date
+                <input type="date" defaultValue={new Date().toISOString().slice(0,10)} className="mt-1 w-full rounded border px-2 py-2"/>
+              </label>
+            </div>
+          </div>
+
+          <div className="rounded-2xl bg-white p-4 shadow">
+            <div className="mb-2 flex items-center justify-between">
+              <h3 className="text-lg font-semibold">Returned Items</h3>
+              <button onClick={add} className="rounded-xl border px-3 py-2 hover:bg-gray-50">+ Add Line</button>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-100">
+                  <tr><th className="p-2 text-left">SKU</th><th className="p-2 text-right">Qty</th><th className="p-2 text-right">Unit Price</th><th className="p-2 text-left">Reason</th></tr>
+                </thead>
+                <tbody>
+                  {lines.map(l=>(
+                    <tr key={l.id} className="border-b last:border-none">
+                      <td className="p-2">
+                        <select value={l.sku} onChange={e=>pick(l.id, e.target.value)} className="w-40 rounded border px-2 py-1">
+                          <option value="">Select…</option>
+                          {CATALOG.map(c=> <option key={c.sku} value={c.sku}>{c.sku}</option>)}
+                        </select>
+                      </td>
+                      <td className="p-2 text-right"><input type="number" min={1} value={l.qty} onChange={e=>setQty(l.id, Number(e.target.value))} className="w-20 rounded border px-2 py-1 text-right"/></td>
+                      <td className="p-2 text-right font-mono">{currency(l.price)}</td>
+                      <td className="p-2"><input value={l.reason} onChange={e=>setLines(ls=>ls.map(x=>x.id===l.id?({...x, reason:e.target.value}):x))} className="w-full rounded border px-2 py-1"/></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="mt-3 grid grid-cols-1 gap-4 md:grid-cols-3">
+              <div className="rounded-xl border p-3">
+                <div className="flex justify-between text-sm"><span>Total Credit</span><span className="font-mono">{currency(totalCredit)}</span></div>
+              </div>
+              <div className="md:col-span-2 text-sm text-gray-600">
+                <p><span className="font-semibold">How it maps:</span> Creates <span className="font-medium">Returns</span> (D7), issues credit in <span className="font-medium">AR</span> (D6), and may restock/adjust <span className="font-medium">Inventory</span> (D4).</p>
+              </div>
+            </div>
+          </div>
+        </section>
+      );
+    }
+
+    /* ---------- Output Report #1 — Shipment Manifest (P3) ---------- */
+    function ShipmentManifest(){
+      const rows = [
+        { shipId:"SHP-001", order:"SO-2025-0001", customer:"Tower Books NYC", items:3, weight: 7.2, carrier:"UPS Ground", freight: 12.8 },
+        { shipId:"SHP-002", order:"SO-2025-0002", customer:"Barnes & Noble", items:5, weight:12.1, carrier:"UPS 2nd Day", freight:22.5 },
+      ];
+      const totals = rows.reduce((s,r)=>({ pkgs:s.pkgs+r.items, weight:s.weight+r.weight, freight:s.freight+r.freight }),{ pkgs:0, weight:0, freight:0});
+      return (
+        <section className="space-y-4 print-white">
+          <div className="flex items-end justify-between">
+            <h2 className="text-xl font-semibold">Daily Shipment Manifest</h2>
+            <div className="text-right text-xs text-gray-600">DFD: P3 • reads D5 (+D2)</div>
+          </div>
+          <div className="rounded-2xl bg-white p-4 shadow">
+            <div className="mb-3 grid grid-cols-1 gap-3 md:grid-cols-4">
+              <label className="text-sm">Date <input type="date" className="mt-1 w-full rounded border px-2 py-2"/></label>
+              <label className="text-sm">Carrier
+                <select className="mt-1 w-full rounded border px-2 py-2"><option>All</option><option>UPS</option><option>RPS</option></select>
+              </label>
+              <label className="text-sm">Service
+                <select className="mt-1 w-full rounded border px-2 py-2"><option>All</option><option>Ground</option><option>2nd Day</option><option>Next Day Air</option></select>
+              </label>
+              <label className="text-sm">Search <input className="mt-1 w-full rounded border px-2 py-2" placeholder="Order #, Customer…"/></label>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-100">
+                  <tr><th className="p-2 text-left">Shipment #</th><th className="p-2 text-left">Order #</th><th className="p-2 text-left">Customer</th><th className="p-2 text-right">Line Items</th><th className="p-2 text-right">Weight (lb)</th><th className="p-2 text-left">Carrier/Service</th><th className="p-2 text-right">Freight ($)</th></tr>
+                </thead>
+                <tbody>
+                  {rows.map(r=>(
+                    <tr key={r.shipId} className="border-b last:border-none">
+                      <td className="p-2 font-mono">{r.shipId}</td>
+                      <td className="p-2 font-mono">{r.order}</td>
+                      <td className="p-2">{r.customer}</td>
+                      <td className="p-2 text-right">{r.items}</td>
+                      <td className="p-2 text-right">{r.weight.toFixed(1)}</td>
+                      <td className="p-2">{r.carrier}</td>
+                      <td className="p-2 text-right">{r.freight.toFixed(2)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr className="bg-gray-50 font-semibold">
+                    <td className="p-2" colSpan="3">Totals</td>
+                    <td className="p-2 text-right">{totals.pkgs}</td>
+                    <td className="p-2 text-right">{totals.weight.toFixed(1)}</td>
+                    <td className="p-2"></td>
+                    <td className="p-2 text-right">{totals.freight.toFixed(2)}</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </div>
+        </section>
+      );
+    }
+
+    /* ---------- Output Report #2 — Customer Statement (P4) ---------- */
+    function CustomerStatement(){
+      const [custId,setCustId]=useState("C-0101");
+      const txns = [
+        { date:"2025-10-02", type:"Invoice",    ref:"INV-10021", charge:219.50, credit:0     },
+        { date:"2025-10-05", type:"Payment",    ref:"PMT-44510", charge:0,      credit:200.00},
+        { date:"2025-10-18", type:"Credit Memo",ref:"CR-00412",  charge:0,      credit:19.50 },
+        { date:"2025-10-25", type:"Invoice",    ref:"INV-10098", charge:149.95, credit:0     },
+      ];
+      const charges = txns.reduce((s,t)=>s+t.charge,0);
+      const credits = txns.reduce((s,t)=>s+t.credit,0);
+      const end = charges - credits;
+
+      const cust = CUSTOMERS.find(c=>c.id===custId);
+
+      return (
+        <section className="space-y-4 print-white">
+          <div className="flex items-end justify-between">
+            <h2 className="text-xl font-semibold">Monthly Customer Statement</h2>
+            <div className="text-right text-xs text-gray-600">DFD: P4 • reads D6</div>
+          </div>
+          <div className="rounded-2xl bg-white p-4 shadow">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+              <label className="text-sm">Customer
+                <select value={custId} onChange={e=>setCustId(e.target.value)} className="mt-1 w-full rounded border px-2 py-2">
+                  {CUSTOMERS.map(c=> <option key={c.id} value={c.id}>{c.id} — {c.name}</option>)}
+                </select>
+              </label>
+              <div className="text-sm">Statement Date
+                <div className="mt-1 rounded border bg-gray-50 p-2">2025-10-31</div>
+              </div>
+              <div className="text-sm">Address
+                <div className="mt-1 rounded border bg-gray-50 p-2">{cust.bill.company}, {cust.bill.address}, {cust.bill.city} {cust.bill.state}</div>
+              </div>
+            </div>
+
+            <div className="mt-3 overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-100"><tr><th className="p-2 text-left">Date</th><th className="p-2 text-left">Type</th><th className="p-2 text-left">Reference</th><th className="p-2 text-right">Charges</th><th className="p-2 text-right">Credits</th></tr></thead>
+                <tbody>
+                  {txns.map((t,i)=>(
+                    <tr key={i} className="border-b last:border-none">
+                      <td className="p-2 font-mono">{t.date}</td>
+                      <td className="p-2">{t.type}</td>
+                      <td className="p-2 font-mono">{t.ref}</td>
+                      <td className="p-2 text-right">{t.charge? currency(t.charge):"—"}</td>
+                      <td className="p-2 text-right">{t.credit? currency(t.credit):"—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr className="bg-gray-50 font-semibold">
+                    <td className="p-2" colSpan="3">Totals</td>
+                    <td className="p-2 text-right">{currency(charges)}</td>
+                    <td className="p-2 text-right">{currency(credits)}</td>
+                  </tr>
+                  <tr>
+                    <td className="p-2" colSpan="5">
+                      <div className="flex justify-end gap-6">
+                        <div>Beginning Balance: {currency(0)}</div>
+                        <div>Ending Balance: {currency(end)}</div>
+                      </div>
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </div>
+        </section>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+  </script>
+</body>
+</html>
